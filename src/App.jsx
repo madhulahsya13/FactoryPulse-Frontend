@@ -1,9 +1,10 @@
 import { useState, useEffect, useCallback } from 'react';
 import axios from 'axios';
 import Login from './Login';
+import { AlertsPage, SensorPage, MaintenancePage } from './ExtraPages';
 import './App.css';
 
-const API_URL = 'https://factorypulse-backend-also.onrender.com/api';
+const API_URL = `${import.meta.env.VITE_API_URL ?? 'https://factorypulse-backend-also.onrender.com'}/api`;
 
 const inputStyle = {
   display: 'block', width: '100%', boxSizing: 'border-box',
@@ -473,9 +474,9 @@ function App() {
             </section>
           </>}
 
-          {page === 'Alerts' && <section className="panel"><h2>Alerts</h2>{alerts.length ? <ul>{alerts.map(alert => <li key={alert.id}>{alert.alertType || 'Alert'} — {alert.message || 'No details'}</li>)}</ul> : <p>No alerts found.</p>}</section>}
-          {page === 'Sensor Monitoring' && <section className="panel"><h2>Sensor Monitoring</h2><p>Sensor monitoring UI will be implemented in a later step.</p></section>}
-          {page === 'Maintenance' && <section className="panel"><h2>Maintenance</h2><p>Maintenance management UI will be implemented in a later step.</p></section>}
+          {page === 'Alerts' && <AlertsPage apiUrl={API_URL} token={token} onChange={loadDashboardData} />}
+          {page === 'Sensor Monitoring' && <SensorPage apiUrl={API_URL} token={token} onChange={loadDashboardData} />}
+          {page === 'Maintenance' && <MaintenancePage apiUrl={API_URL} token={token} />}
           <footer className="footer">FactoryPulse · Industrial Intelligence &amp; Predictive Maintenance</footer>
         </main>
       </div>
