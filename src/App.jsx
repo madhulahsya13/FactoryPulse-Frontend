@@ -1,26 +1,35 @@
 import { useState, useEffect, useCallback } from 'react';
 import axios from 'axios';
 import Login from './Login';
+import { Icon } from './icons';
+import DashboardInsights from './Insights';
 import { AlertsPage, SensorPage, MaintenancePage } from './ExtraPages';
 import './App.css';
 
 const API_URL = `${import.meta.env.VITE_API_URL ?? 'https://factorypulse-backend-also.onrender.com'}/api`;
 
-const inputStyle = {
-  display: 'block', width: '100%', boxSizing: 'border-box',
-  padding: '12px', margin: '8px 0 18px', borderRadius: '8px',
-  border: '1px solid #344054', background: '#111827', color: '#ffffff',
+const NAV = [
+  ['Dashboard', 'dashboard'], ['Factories', 'factory'], ['Production Lines', 'layers'],
+  ['Machines', 'cpu'], ['Sensor Monitoring', 'activity'], ['Alerts', 'bell'], ['Maintenance', 'wrench'],
+];
+
+const PAGE_INFO = {
+  Dashboard: ['Factory Dashboard', 'Monitor your factory operations in one place.'],
+  Factories: ['Factories', 'Register and manage your factories.'],
+  'Production Lines': ['Production Lines', 'Organise the lines inside each factory.'],
+  Machines: ['Machines', 'Register machines and track their status.'],
+  'Sensor Monitoring': ['Sensor Monitoring', 'Record and review machine sensor readings.'],
+  Alerts: ['Alerts', 'Raise, track and resolve machine alerts.'],
+  Maintenance: ['Maintenance', 'Schedule and track maintenance work.'],
 };
-const primaryButtonStyle = {
-  padding: '10px 16px', border: 'none', borderRadius: '8px',
-  background: '#2563eb', color: '#ffffff', cursor: 'pointer',
-};
-const deleteButtonStyle = {
-  padding: '8px 12px', border: 'none', borderRadius: '6px',
-  background: '#b91c1c', color: '#ffffff', cursor: 'pointer',
-};
-const tableStyle = { width: '100%', borderCollapse: 'collapse', textAlign: 'left' };
-const cellStyle = { padding: '12px', borderBottom: '1px solid #344054' };
+
+function statusClass(status) {
+  const value = String(status || '').toUpperCase();
+  if (value === 'RUNNING') return 'running';
+  if (value === 'STOPPED') return 'stopped';
+  if (value === 'MAINTENANCE') return 'maint';
+  return '';
+}
 
 function App() {
   const [token, setToken] = useState(() => sessionStorage.getItem('factorypulse_token'));
@@ -30,6 +39,7 @@ function App() {
   const [factories, setFactories] = useState([]);
   const [productionLines, setProductionLines] = useState([]);
   const [page, setPage] = useState('Dashboard');
+  const [sidebarOpen, setSidebarOpen] = useState(() => window.innerWidth > 900);
 
   const [loadingDashboard, setLoadingDashboard] = useState(false);
   const [loadingFactories, setLoadingFactories] = useState(false);
@@ -48,8 +58,6 @@ function App() {
   const [machineMessage, setMachineMessage] = useState('');
 
   const [factoryName, setFactoryName] = useState('');
-  const [factoryLocation, setFactoryLocation] = useState('');
-  const [factoryDescription, setFactoryDescription] = useState('');
   const [lineName, setLineName] = useState('');
   const [lineDescription, setLineDescription] = useState('');
   const [selectedFactoryId, setSelectedFactoryId] = useState('');
@@ -86,6 +94,16 @@ function App() {
     sessionStorage.setItem('factorypulse_role', data.role || 'USER');
     setToken(data.token);
   };
+
+  // No role is sent: the server always makes public sign-ups Factory Owners.
+  const handleRegister = async (name, email, password, factoryName) => {
+    await axios.post(`${API_URL}/users/register`, { name, email, password, factoryName });
+  };
+
+  function goTo(name) {
+    setPage(name);
+    if (window.innerWidth <= 900) setSidebarOpen(false);
+  }
 
   const loadFactories = useCallback(async () => {
     if (!token) return;
@@ -157,6 +175,8 @@ function App() {
   }, [token, getAuthConfig, logout]);
 
   useEffect(() => { if (token) loadDashboardData(); }, [token, loadDashboardData]);
+  // Wake the free server while the person is still on the login page.
+  useEffect(() => { if (!token) axios.get(`${API_URL}/health`).catch(() => {}); }, [token]);
   useEffect(() => {
     if (!token) return;
     if (page === 'Factories') loadFactories();
@@ -178,13 +198,9 @@ function App() {
     try {
       const response = await axios.post(`${API_URL}/factories`, {
         name: factoryName.trim(),
-        location: factoryLocation.trim(),
-        description: factoryDescription.trim(),
       }, getAuthConfig());
       setFactories(current => [...current, response.data]);
       setFactoryName('');
-      setFactoryLocation('');
-      setFactoryDescription('');
       setFactoryMessage('Factory added successfully.');
     } catch (error) {
       setFactoryError(error.response?.data?.message || 'Could not add factory. Check the Factory model.');
@@ -290,7 +306,7 @@ function App() {
     }
   }
 
-  if (!token) return <Login onLogin={handleLogin} />;
+  if (!token) return <Login onLogin={handleLogin} onRegister={handleRegister} />;
 
   const latestReading = dashboard?.latestReading;
   const totalMachines = dashboard?.totalMachines ?? machines.length;
@@ -301,72 +317,86 @@ function App() {
   const temperature = latestReading?.temperature;
   const vibration = latestReading?.vibration;
   const pressure = latestReading?.pressure;
-  const userName = sessionStorage.getItem('factorypulse_name') || 'Admin';
-  const userRole = sessionStorage.getItem('factorypulse_role') || 'USER';
+  const userName = sessionStorage.getItem('factorypulse_name') || 'User';
+  const isAdmin = (sessionStorage.getItem('factorypulse_role') || '').toUpperCase() === 'ADMIN';
+  const userRole = isAdmin ? 'Admin' : 'Factory Owner';
+  const ownerOf = (owner) => (owner ? `${owner.name || '—'} (${owner.email})` : 'Unassigned');
   const unresolvedAlerts = alerts.filter(alert => !alert.resolved);
   const displayedMachine = machines[0];
-  const machineName = displayedMachine?.name || 'CNC-01';
+  const machineName = displayedMachine?.name || 'No machines yet';
   const machineStatus = displayedMachine?.status || 'UNKNOWN';
   const temperatureHigh = typeof temperature === 'number' && temperature > 80;
   const vibrationHigh = typeof vibration === 'number' && vibration > 6;
   const pressureNormal = typeof pressure === 'number' && pressure >= 70 && pressure <= 110;
 
   return (
-      <div className="app">
-        <aside className="sidebar">
-          <h2>⚙ FactoryPulse</h2>
-          <p className="sidebar-subtitle">Industrial Intelligence</p>
+      <div className={`app ${sidebarOpen ? '' : 'sidebar-closed'}`}>
+        <aside className="sidebar" aria-hidden={!sidebarOpen}>
+          <div className="brand">
+            <div className="brand-logo"><Icon name="cpu" size={22} /></div>
+            <div className="brand-text">
+              <h2>FactoryPulse</h2>
+              <p className="sidebar-subtitle">Industrial Intelligence</p>
+            </div>
+            <button type="button" className="icon-btn" onClick={() => setSidebarOpen(false)} aria-label="Close menu">
+              <Icon name="menu" />
+            </button>
+          </div>
+          <p className="nav-label">MENU</p>
           <nav>
-            {[
-              ['Dashboard', '▦'], ['Factories', '▤'], ['Production Lines', '⌁'],
-              ['Machines', '⚙'], ['Sensor Monitoring', '⌁'], ['Alerts', '⚠'], ['Maintenance', '🔧'],
-            ].map(([name, icon]) => (
+            {NAV.map(([name, icon]) => (
                 <button type="button" key={name} className={`nav-item ${page === name ? 'active' : ''}`}
-                        onClick={() => setPage(name)}
-                        style={{ width: '100%', border: 'none', textAlign: 'left', cursor: 'pointer', font: 'inherit' }}>
-                  {icon} {name}
+                        onClick={() => goTo(name)}>
+                  <Icon name={icon} />
+                  <span>{name}</span>
+                  {name === 'Alerts' && unresolvedAlerts.length > 0 && <span className="nav-badge">{unresolvedAlerts.length}</span>}
                 </button>
             ))}
           </nav>
           <div className="sidebar-footer"><span className="status-dot"></span>System Online</div>
         </aside>
+        {sidebarOpen && <div className="backdrop" onClick={() => setSidebarOpen(false)} />}
 
         <main className="main-content">
           <header className="topbar">
-            <div>
-              <h1>{page === 'Dashboard' ? 'Factory Dashboard' : page}</h1>
-              <p>Monitor your factory operations in one place.</p>
+            <button type="button" className="icon-btn" onClick={() => setSidebarOpen(open => !open)}
+                    aria-label={sidebarOpen ? 'Close menu' : 'Open menu'}>
+              <Icon name="menu" />
+            </button>
+            <div className="topbar-title">
+              <h1>{(PAGE_INFO[page] || PAGE_INFO.Dashboard)[0]}</h1>
+              <p>{(PAGE_INFO[page] || PAGE_INFO.Dashboard)[1]}</p>
             </div>
             <div className="user-info">
-              <span className="status-dot"></span><span>{userName} · {userRole}</span>
-              <button type="button" className="logout-button" onClick={logout}>Logout</button>
+              <div className="avatar">{(userName || 'U').trim().charAt(0).toUpperCase()}</div>
+              <div className="user-meta"><strong>{userName}</strong><span>{userRole}</span></div>
+              <button type="button" className="logout-button" onClick={logout}>
+                <Icon name="logout" size={15} /><span>Logout</span>
+              </button>
             </div>
           </header>
 
           {page === 'Factories' && <>
-            <section className="welcome"><div><p className="eyebrow">FACTORY MANAGEMENT</p><h2>Your Factories</h2><p>Register and manage your factories.</p></div><div className="welcome-icon">▤</div></section>
-            <section className="panel" style={{ marginBottom: 24 }}>
+            <section className="welcome"><div><p className="eyebrow">FACTORY MANAGEMENT</p><h2>{isAdmin ? 'All Factories' : 'Your Factories'}</h2><p>{isAdmin ? 'Every factory with its owner.' : 'Register and manage your factories.'}</p></div><div className="welcome-icon">▤</div></section>
+            {!isAdmin && <section className="panel" style={{ marginBottom: 24 }}>
               <h3>Add a Factory</h3>
               <form onSubmit={addFactory}>
                 <label htmlFor="factoryName">Factory name</label>
-                <input id="factoryName" value={factoryName} onChange={e => setFactoryName(e.target.value)} placeholder="Factory name" required style={inputStyle} />
-                <label htmlFor="factoryLocation">Location</label>
-                <input id="factoryLocation" value={factoryLocation} onChange={e => setFactoryLocation(e.target.value)} placeholder="City, state" style={inputStyle} />
-                <label htmlFor="factoryDescription">Description</label>
-                <textarea id="factoryDescription" value={factoryDescription} onChange={e => setFactoryDescription(e.target.value)} rows={3} style={inputStyle} />
-                <button type="submit" disabled={addingFactory} style={primaryButtonStyle}>{addingFactory ? 'Adding...' : '+ Add Factory'}</button>
+                <input id="factoryName" value={factoryName} onChange={e => setFactoryName(e.target.value)} placeholder="Factory name" required />
+                <button type="submit" disabled={addingFactory} className="btn-primary">{addingFactory ? 'Adding...' : '+ Add Factory'}</button>
               </form>
               {factoryMessage && <p className="green">{factoryMessage}</p>}
               {factoryError && <p className="orange" role="alert">{factoryError}</p>}
-            </section>
+            </section>}
             <section className="panel">
-              <div className="panel-heading"><h3>Registered Factories</h3><button type="button" onClick={loadFactories} style={primaryButtonStyle}>Refresh</button></div>
+              <div className="panel-heading"><h3>{isAdmin ? 'All Factories' : 'My Factories'}</h3><button type="button" onClick={loadFactories} className="btn-primary">Refresh</button></div>
+              {isAdmin && factoryError && <p className="orange" role="alert">{factoryError}</p>}
               {loadingFactories ? <p>Loading factories...</p> : factories.length === 0 ? <p>No factories found.</p> : (
-                  <div style={{ overflowX: 'auto' }}><table style={tableStyle}><thead><tr>
-                    {['ID', 'Name', 'Location', 'Description', 'Action'].map(h => <th key={h} style={cellStyle}>{h}</th>)}
+                  <div style={{ overflowX: 'auto' }}><table><thead><tr>
+                    {['Factory', ...(isAdmin ? ['Owner'] : []), 'Action'].map(h => <th key={h}>{h}</th>)}
                   </tr></thead><tbody>{factories.map(factory => <tr key={factory.id}>
-                    <td style={cellStyle}>{factory.id}</td><td style={cellStyle}>{factory.name}</td><td style={cellStyle}>{factory.location || '—'}</td><td style={cellStyle}>{factory.description || '—'}</td>
-                    <td style={cellStyle}><button type="button" onClick={() => deleteFactory(factory.id)} style={deleteButtonStyle}>Delete</button></td>
+                    <td>{factory.name}</td>{isAdmin && <td>{ownerOf(factory.owner)}</td>}
+                    <td><button type="button" onClick={() => deleteFactory(factory.id)} className="btn-danger">Delete</button></td>
                   </tr>)}</tbody></table></div>
               )}
             </section>
@@ -379,25 +409,25 @@ function App() {
               {factories.length === 0 && !loadingFactories && <p className="orange">Register a factory first, then return here to add a production line.</p>}
               <form onSubmit={addProductionLine}>
                 <label htmlFor="lineName">Production line name</label>
-                <input id="lineName" value={lineName} onChange={e => setLineName(e.target.value)} placeholder="e.g. Production Line A" required style={inputStyle} />
+                <input id="lineName" value={lineName} onChange={e => setLineName(e.target.value)} placeholder="e.g. Production Line A" required />
                 <label htmlFor="selectedFactory">Select factory</label>
-                <select id="selectedFactory" value={selectedFactoryId} onChange={e => setSelectedFactoryId(e.target.value)} required style={inputStyle}>
+                <select id="selectedFactory" value={selectedFactoryId} onChange={e => setSelectedFactoryId(e.target.value)} required>
                   <option value="">Choose a factory</option>{factories.map(factory => <option key={factory.id} value={factory.id}>{factory.name} (ID: {factory.id})</option>)}
                 </select>
                 <label htmlFor="lineDescription">Description</label>
-                <textarea id="lineDescription" value={lineDescription} onChange={e => setLineDescription(e.target.value)} placeholder="Describe this production line" rows={3} style={inputStyle} />
-                <button type="submit" disabled={addingLine || factories.length === 0} style={primaryButtonStyle}>{addingLine ? 'Adding...' : '+ Add Production Line'}</button>
+                <textarea id="lineDescription" value={lineDescription} onChange={e => setLineDescription(e.target.value)} placeholder="Describe this production line" rows={3} />
+                <button type="submit" disabled={addingLine || factories.length === 0} className="btn-primary">{addingLine ? 'Adding...' : '+ Add Production Line'}</button>
               </form>
               {lineMessage && <p className="green">{lineMessage}</p>}{lineError && <p className="orange" role="alert">{lineError}</p>}
             </section>
             <section className="panel">
-              <div className="panel-heading"><h3>Registered Production Lines</h3><button type="button" onClick={loadProductionLines} style={primaryButtonStyle}>Refresh</button></div>
+              <div className="panel-heading"><h3>Registered Production Lines</h3><button type="button" onClick={loadProductionLines} className="btn-primary">Refresh</button></div>
               {loadingLines ? <p>Loading production lines...</p> : productionLines.length === 0 ? <p>No production lines found. Add your first production line above.</p> : (
-                  <div style={{ overflowX: 'auto' }}><table style={tableStyle}><thead><tr>
-                    {['ID', 'Line Name', 'Factory', 'Description', 'Action'].map(h => <th key={h} style={cellStyle}>{h}</th>)}
+                  <div style={{ overflowX: 'auto' }}><table><thead><tr>
+                    {['ID', 'Line Name', 'Factory', ...(isAdmin ? ['Owner'] : []), 'Description', 'Action'].map(h => <th key={h}>{h}</th>)}
                   </tr></thead><tbody>{productionLines.map(line => <tr key={line.id}>
-                    <td style={cellStyle}>{line.id}</td><td style={cellStyle}>{line.name}</td><td style={cellStyle}>{line.factory?.name || `Factory ID ${line.factory?.id ?? '—'}`}</td><td style={cellStyle}>{line.description || '—'}</td>
-                    <td style={cellStyle}><button type="button" onClick={() => deleteProductionLine(line.id)} style={deleteButtonStyle}>Delete</button></td>
+                    <td>{line.id}</td><td>{line.name}</td><td>{line.factory?.name || `Factory ID ${line.factory?.id ?? '—'}`}</td>{isAdmin && <td>{ownerOf(line.factory?.owner)}</td>}<td>{line.description || '—'}</td>
+                    <td><button type="button" onClick={() => deleteProductionLine(line.id)} className="btn-danger">Delete</button></td>
                   </tr>)}</tbody></table></div>
               )}
             </section>
@@ -410,34 +440,34 @@ function App() {
               {productionLines.length === 0 && !loadingLines && <p className="orange">Add a production line first, then return here to register a machine.</p>}
               <form onSubmit={addMachine}>
                 <label htmlFor="machineNameInput">Machine name</label>
-                <input id="machineNameInput" value={machineNameInput} onChange={e => setMachineNameInput(e.target.value)} placeholder="e.g. CNC-02" required style={inputStyle} />
+                <input id="machineNameInput" value={machineNameInput} onChange={e => setMachineNameInput(e.target.value)} placeholder="e.g. CNC-02" required />
                 <label htmlFor="machineTypeInput">Machine type</label>
-                <input id="machineTypeInput" value={machineTypeInput} onChange={e => setMachineTypeInput(e.target.value)} placeholder="e.g. CNC Milling Machine" required style={inputStyle} />
+                <input id="machineTypeInput" value={machineTypeInput} onChange={e => setMachineTypeInput(e.target.value)} placeholder="e.g. CNC Milling Machine" required />
                 <label htmlFor="machineStatusInput">Status</label>
-                <select id="machineStatusInput" value={machineStatusInput} onChange={e => setMachineStatusInput(e.target.value)} required style={inputStyle}>
+                <select id="machineStatusInput" value={machineStatusInput} onChange={e => setMachineStatusInput(e.target.value)} required>
                   <option value="RUNNING">RUNNING</option><option value="STOPPED">STOPPED</option><option value="MAINTENANCE">MAINTENANCE</option>
                 </select>
                 <label htmlFor="operatingHoursInput">Operating hours</label>
-                <input id="operatingHoursInput" type="number" min="0" step="0.1" value={operatingHoursInput} onChange={e => setOperatingHoursInput(e.target.value)} required style={inputStyle} />
+                <input id="operatingHoursInput" type="number" min="0" step="0.1" value={operatingHoursInput} onChange={e => setOperatingHoursInput(e.target.value)} required />
                 <label htmlFor="selectedLineId">Production line</label>
-                <select id="selectedLineId" value={selectedLineId} onChange={e => setSelectedLineId(e.target.value)} required style={inputStyle}>
+                <select id="selectedLineId" value={selectedLineId} onChange={e => setSelectedLineId(e.target.value)} required>
                   <option value="">Choose a production line</option>{productionLines.map(line => <option key={line.id} value={line.id}>{line.name} (ID: {line.id})</option>)}
                 </select>
-                <button type="submit" disabled={addingMachine || productionLines.length === 0} style={primaryButtonStyle}>{addingMachine ? 'Adding...' : '+ Add Machine'}</button>
+                <button type="submit" disabled={addingMachine || productionLines.length === 0} className="btn-primary">{addingMachine ? 'Adding...' : '+ Add Machine'}</button>
               </form>
               {machineMessage && <p className="green">{machineMessage}</p>}{machineError && <p className="orange" role="alert">{machineError}</p>}
             </section>
             <section className="panel">
-              <div className="panel-heading"><h3>Registered Machines</h3><button type="button" onClick={loadMachines} style={primaryButtonStyle}>Refresh</button></div>
+              <div className="panel-heading"><h3>Registered Machines</h3><button type="button" onClick={loadMachines} className="btn-primary">Refresh</button></div>
               {loadingMachines ? <p>Loading machines...</p> : machines.length === 0 ? <p>No machines found. Add your first machine above.</p> : (
-                  <div style={{ overflowX: 'auto' }}><table style={tableStyle}><thead><tr>
-                    {['ID', 'Machine', 'Type', 'Status', 'Operating Hours', 'Production Line', 'Action'].map(h => <th key={h} style={cellStyle}>{h}</th>)}
+                  <div style={{ overflowX: 'auto' }}><table><thead><tr>
+                    {['ID', 'Machine', 'Type', 'Status', 'Operating Hours', 'Production Line', ...(isAdmin ? ['Factory', 'Owner'] : []), 'Action'].map(h => <th key={h}>{h}</th>)}
                   </tr></thead><tbody>{machines.map(machine => <tr key={machine.id}>
-                    <td style={cellStyle}>{machine.id}</td><td style={cellStyle}>{machine.name || '—'}</td><td style={cellStyle}>{machine.machineType || machine.type || '—'}</td>
-                    <td style={cellStyle}><span className={`badge ${machine.status?.toUpperCase() === 'RUNNING' ? 'running' : ''}`}>{machine.status || 'UNKNOWN'}</span></td>
-                    <td style={cellStyle}>{machine.operatingHours ?? '—'}</td>
-                    <td style={cellStyle}>{machine.productionLine?.name || `Line ID ${machine.productionLine?.id ?? '—'}`}</td>
-                    <td style={cellStyle}><button type="button" onClick={() => deleteMachine(machine.id)} style={deleteButtonStyle}>Delete</button></td>
+                    <td>{machine.id}</td><td>{machine.name || '—'}</td><td>{machine.machineType || machine.type || '—'}</td>
+                    <td><span className={`badge ${statusClass(machine.status)}`}>{machine.status || 'UNKNOWN'}</span></td>
+                    <td>{machine.operatingHours ?? '—'}</td>
+                    <td>{machine.productionLine?.name || `Line ID ${machine.productionLine?.id ?? '—'}`}</td>{isAdmin && <><td>{machine.productionLine?.factory?.name || '—'}</td><td>{ownerOf(machine.productionLine?.factory?.owner)}</td></>}
+                    <td><button type="button" onClick={() => deleteMachine(machine.id)} className="btn-danger">Delete</button></td>
                   </tr>)}</tbody></table></div>
               )}
             </section>
@@ -445,18 +475,18 @@ function App() {
 
           {page === 'Dashboard' && <>
             <section className="welcome"><div><p className="eyebrow">INDUSTRIAL INTELLIGENCE PLATFORM</p><h2>Welcome to FactoryPulse</h2><p>Monitor machines, detect abnormalities, and improve production performance.</p></div><div className="welcome-icon">⌁</div></section>
-            {dashboardError && <div className="panel" role="alert"><p className="orange">{dashboardError}</p><p>Make sure the Spring Boot backend is running on port 8080.</p></div>}
+            {dashboardError && <div className="panel" role="alert"><p className="orange">{dashboardError}</p><p className="muted">The server may be waking up (free hosting). Wait up to a minute, then retry.</p><button type="button" className="btn-primary" style={{ marginTop: 14 }} onClick={loadDashboardData}>Retry</button></div>}
             {loadingDashboard && <div className="panel">Loading your factory data...</div>}
             <section className="stats-grid">
-              <div className="stat-card"><p>Total Machines</p><h2>{totalMachines}</h2><span>Registered machines</span></div>
-              <div className="stat-card"><p>Running Machines</p><h2 className="green">{runningMachines}</h2><span>Currently running</span></div>
-              <div className="stat-card"><p>Active Alerts</p><h2 className="orange">{activeAlerts}</h2><span>Unresolved alerts</span></div>
-              <div className="stat-card"><p>Production Count</p><h2>{productionCount}</h2><span>Latest recorded reading</span></div>
+              <div className="stat-card"><div className="stat-icon"><Icon name="cpu" /></div><p>Total Machines</p><h2>{totalMachines}</h2><span>Registered machines</span></div>
+              <div className="stat-card"><div className="stat-icon"><Icon name="activity" /></div><p>Running Machines</p><h2 className="green">{runningMachines}</h2><span>Currently running</span></div>
+              <div className="stat-card"><div className="stat-icon"><Icon name="bell" /></div><p>Active Alerts</p><h2 className="orange">{activeAlerts}</h2><span>Unresolved alerts</span></div>
+              <div className="stat-card"><div className="stat-icon"><Icon name="layers" /></div><p>Production Count</p><h2>{productionCount}</h2><span>Latest recorded reading</span></div>
             </section>
             <section className="content-grid">
               <div className="panel machine-panel">
-                <div className="panel-heading"><div><h3>Machine Status</h3><p>Your registered industrial equipment</p></div><span className={`badge ${machineStatus.toUpperCase() === 'RUNNING' ? 'running' : ''}`}>● {machineStatus.toUpperCase()}</span></div>
-                <div className="machine-details"><div className="machine-icon">⚙</div><div><h3>{machineName}</h3><p>{displayedMachine?.machineType || displayedMachine?.type || 'Industrial Machine'}{' · '}{displayedMachine?.productionLine?.name || 'Production Line A'}</p><span className="muted">{displayedMachine?.productionLine?.factory?.name || 'Hyderabad Manufacturing Plant'}</span></div></div>
+                <div className="panel-heading"><div><h3>Machine Status</h3><p>Your registered industrial equipment</p></div><span className={`badge ${statusClass(machineStatus)}`}>● {machineStatus.toUpperCase()}</span></div>
+                <div className="machine-details"><div className="machine-icon">⚙</div><div><h3>{machineName}</h3><p>{displayedMachine?.machineType || displayedMachine?.type || 'Add a machine to see its status'}{' · '}{displayedMachine?.productionLine?.name || '—'}</p><span className="muted">{displayedMachine?.productionLine?.factory?.name || ''}</span></div></div>
                 <div className="sensor-grid">
                   <div className="sensor-card"><span>Temperature</span><h3>{typeof temperature === 'number' ? `${temperature}°C` : '—'}</h3><small className={temperatureHigh ? 'orange' : 'green'}>{temperature == null ? 'No reading available' : temperatureHigh ? 'Above safe limit' : 'Within temperature limit'}</small></div>
                   <div className="sensor-card"><span>Vibration</span><h3>{typeof vibration === 'number' ? `${vibration} mm/s` : '—'}</h3><small className={vibrationHigh ? 'orange' : 'green'}>{vibration == null ? 'No reading available' : vibrationHigh ? 'Above safe limit' : 'Within vibration limit'}</small></div>
@@ -472,6 +502,7 @@ function App() {
                 <div className="alert-footer"><span>Alert system</span><strong>Enabled</strong></div>
               </div>
             </section>
+          <DashboardInsights apiUrl={API_URL} token={token} />
           </>}
 
           {page === 'Alerts' && <AlertsPage apiUrl={API_URL} token={token} onChange={loadDashboardData} />}

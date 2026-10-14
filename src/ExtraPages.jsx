@@ -1,21 +1,20 @@
 import { useState, useEffect, useCallback } from 'react';
 import axios from 'axios';
+import { Icon } from './icons';
 
-const inputStyle = {
-  display: 'block', width: '100%', boxSizing: 'border-box',
-  padding: '12px', margin: '8px 0 18px', borderRadius: '8px',
-  border: '1px solid #344054', background: '#111827', color: '#ffffff',
+const sevClass = value => {
+  const v = String(value || '').toUpperCase();
+  if (v === 'HIGH') return 'stopped';
+  if (v === 'MEDIUM') return 'maint';
+  if (v === 'LOW') return 'info';
+  return '';
 };
-const primaryButtonStyle = {
-  padding: '10px 16px', border: 'none', borderRadius: '8px',
-  background: '#2563eb', color: '#ffffff', cursor: 'pointer',
+const maintClass = value => {
+  const v = String(value || '').toUpperCase();
+  if (v === 'COMPLETED') return 'running';
+  if (v === 'IN_PROGRESS') return 'maint';
+  return 'info';
 };
-const deleteButtonStyle = {
-  padding: '8px 12px', border: 'none', borderRadius: '6px',
-  background: '#b91c1c', color: '#ffffff', cursor: 'pointer', marginLeft: 6,
-};
-const tableStyle = { width: '100%', borderCollapse: 'collapse', textAlign: 'left' };
-const cellStyle = { padding: '12px', borderBottom: '1px solid #344054' };
 
 function useList(apiUrl, path, token) {
   const [items, setItems] = useState([]);
@@ -52,7 +51,7 @@ function MachineSelect({ machines, value, onChange }) {
   return (
     <>
       <label>Machine</label>
-      <select value={value} onChange={e => onChange(e.target.value)} required style={inputStyle}>
+      <select value={value} onChange={e => onChange(e.target.value)} required>
         <option value="">Choose a machine</option>
         {machines.map(m => <option key={m.id} value={m.id}>{m.name} (ID: {m.id})</option>)}
       </select>
@@ -65,7 +64,7 @@ function NumberField({ label, value, onChange, step = '0.1', required = false })
     <>
       <label>{label}</label>
       <input type="number" step={step} value={value} required={required}
-             onChange={e => onChange(e.target.value)} style={inputStyle} />
+             onChange={e => onChange(e.target.value)} />
     </>
   );
 }
@@ -130,46 +129,46 @@ export function AlertsPage({ apiUrl, token, onChange }) {
 
   return (
     <>
-      <Header eyebrow="ALERT CENTER" title="Alerts" text="Raise, track and resolve machine alerts." icon="⚠" />
+      <Header eyebrow="ALERT CENTER" title="Alerts" text="Raise, track and resolve machine alerts." icon={<Icon name="bell" size={56} />} />
       <section className="panel" style={{ marginBottom: 24 }}>
         <h3>Add an Alert</h3>
         {machines.items.length === 0 && !machines.loading && <p className="orange">Add a machine first.</p>}
         <form onSubmit={addAlert}>
           <MachineSelect machines={machines.items} value={machineId} onChange={setMachineId} />
           <label>Alert type</label>
-          <select value={alertType} onChange={e => setAlertType(e.target.value)} style={inputStyle}>
+          <select value={alertType} onChange={e => setAlertType(e.target.value)}>
             <option value="HIGH_TEMPERATURE">HIGH_TEMPERATURE</option>
             <option value="HIGH_VIBRATION">HIGH_VIBRATION</option>
             <option value="LOW_PRESSURE">LOW_PRESSURE</option>
             <option value="OTHER">OTHER</option>
           </select>
           <label>Severity</label>
-          <select value={severity} onChange={e => setSeverity(e.target.value)} style={inputStyle}>
+          <select value={severity} onChange={e => setSeverity(e.target.value)}>
             <option value="LOW">LOW</option><option value="MEDIUM">MEDIUM</option><option value="HIGH">HIGH</option>
           </select>
           <label>Message</label>
-          <input value={message} onChange={e => setMessage(e.target.value)} placeholder="e.g. Temperature above limit" required style={inputStyle} />
-          <button type="submit" disabled={saving || machines.items.length === 0} style={primaryButtonStyle}>{saving ? 'Adding...' : '+ Add Alert'}</button>
+          <input value={message} onChange={e => setMessage(e.target.value)} placeholder="e.g. Temperature above limit" required />
+          <button type="submit" disabled={saving || machines.items.length === 0} className="btn-primary">{saving ? 'Adding...' : '+ Add Alert'}</button>
         </form>
         {note && <p className="green">{note}</p>}
         {alerts.error && <p className="orange" role="alert">{alerts.error}</p>}
       </section>
       <section className="panel">
-        <div className="panel-heading"><h3>All Alerts</h3><button type="button" onClick={alerts.load} style={primaryButtonStyle}>Refresh</button></div>
+        <div className="panel-heading"><h3>All Alerts</h3><button type="button" onClick={alerts.load} className="btn-primary">Refresh</button></div>
         {alerts.loading ? <p>Loading alerts...</p> : alerts.items.length === 0 ? <p>No alerts found.</p> : (
-          <div style={{ overflowX: 'auto' }}><table style={tableStyle}><thead><tr>
-            {['ID', 'Machine', 'Type', 'Severity', 'Message', 'Time', 'Status', 'Action'].map(h => <th key={h} style={cellStyle}>{h}</th>)}
+          <div style={{ overflowX: 'auto' }}><table><thead><tr>
+            {['ID', 'Machine', 'Type', 'Severity', 'Message', 'Time', 'Status', 'Action'].map(h => <th key={h}>{h}</th>)}
           </tr></thead><tbody>{alerts.items.map(a => <tr key={a.id}>
-            <td style={cellStyle}>{a.id}</td>
-            <td style={cellStyle}>{a.machine?.name || '—'}</td>
-            <td style={cellStyle}>{a.alertType || '—'}</td>
-            <td style={cellStyle}>{a.severity || '—'}</td>
-            <td style={cellStyle}>{a.message || '—'}</td>
-            <td style={cellStyle}>{fmtTime(a.timestamp)}</td>
-            <td style={cellStyle}><span className={`badge ${a.resolved ? 'running' : ''}`}>{a.resolved ? 'RESOLVED' : 'OPEN'}</span></td>
-            <td style={cellStyle}>
-              {!a.resolved && <button type="button" onClick={() => resolveAlert(a.id)} style={primaryButtonStyle}>Resolve</button>}
-              <button type="button" onClick={() => deleteAlert(a.id)} style={deleteButtonStyle}>Delete</button>
+            <td>{a.id}</td>
+            <td>{a.machine?.name || '—'}</td>
+            <td>{a.alertType || '—'}</td>
+            <td><span className={`badge ${sevClass(a.severity)}`}>{a.severity || '—'}</span></td>
+            <td>{a.message || '—'}</td>
+            <td>{fmtTime(a.timestamp)}</td>
+            <td><span className={`badge ${a.resolved ? 'running' : ''}`}>{a.resolved ? 'RESOLVED' : 'OPEN'}</span></td>
+            <td>
+              {!a.resolved && <button type="button" onClick={() => resolveAlert(a.id)} className="btn-primary">Resolve</button>}
+              <button type="button" onClick={() => deleteAlert(a.id)} className="btn-danger">Delete</button>
             </td>
           </tr>)}</tbody></table></div>
         )}
@@ -234,7 +233,7 @@ export function SensorPage({ apiUrl, token, onChange }) {
 
   return (
     <>
-      <Header eyebrow="LIVE DATA" title="Sensor Monitoring" text="Record and view machine sensor readings." icon="⌁" />
+      <Header eyebrow="LIVE DATA" title="Sensor Monitoring" text="Record and view machine sensor readings." icon={<Icon name="activity" size={56} />} />
       <section className="panel" style={{ marginBottom: 24 }}>
         <h3>Add a Sensor Reading</h3>
         {machines.items.length === 0 && !machines.loading && <p className="orange">Add a machine first.</p>}
@@ -246,27 +245,27 @@ export function SensorPage({ apiUrl, token, onChange }) {
           <NumberField label="RPM" value={rpm} onChange={setRpm} step="1" required />
           <NumberField label="Power consumption (kW)" value={power} onChange={setPower} required />
           <NumberField label="Production count" value={count} onChange={setCount} step="1" required />
-          <button type="submit" disabled={saving || machines.items.length === 0} style={primaryButtonStyle}>{saving ? 'Saving...' : '+ Add Reading'}</button>
+          <button type="submit" disabled={saving || machines.items.length === 0} className="btn-primary">{saving ? 'Saving...' : '+ Add Reading'}</button>
         </form>
         {note && <p className="green">{note}</p>}
         {readings.error && <p className="orange" role="alert">{readings.error}</p>}
       </section>
       <section className="panel">
-        <div className="panel-heading"><h3>Latest Readings</h3><button type="button" onClick={readings.load} style={primaryButtonStyle}>Refresh</button></div>
+        <div className="panel-heading"><h3>Latest Readings</h3><button type="button" onClick={readings.load} className="btn-primary">Refresh</button></div>
         {readings.loading ? <p>Loading readings...</p> : readings.items.length === 0 ? <p>No sensor readings yet. Add one above.</p> : (
-          <div style={{ overflowX: 'auto' }}><table style={tableStyle}><thead><tr>
-            {['ID', 'Machine', 'Temp °C', 'Vibration', 'Pressure', 'RPM', 'Power', 'Count', 'Time', 'Action'].map(h => <th key={h} style={cellStyle}>{h}</th>)}
+          <div style={{ overflowX: 'auto' }}><table><thead><tr>
+            {['ID', 'Machine', 'Temp °C', 'Vibration', 'Pressure', 'RPM', 'Power', 'Count', 'Time', 'Action'].map(h => <th key={h}>{h}</th>)}
           </tr></thead><tbody>{readings.items.slice(0, 50).map(r => <tr key={r.id}>
-            <td style={cellStyle}>{r.id}</td>
-            <td style={cellStyle}>{r.machine?.name || '—'}</td>
-            <td style={cellStyle}>{r.temperature ?? '—'}</td>
-            <td style={cellStyle}>{r.vibration ?? '—'}</td>
-            <td style={cellStyle}>{r.pressure ?? '—'}</td>
-            <td style={cellStyle}>{r.rpm ?? '—'}</td>
-            <td style={cellStyle}>{r.powerConsumption ?? '—'}</td>
-            <td style={cellStyle}>{r.productionCount ?? '—'}</td>
-            <td style={cellStyle}>{fmtTime(r.timestamp)}</td>
-            <td style={cellStyle}><button type="button" onClick={() => deleteReading(r.id)} style={deleteButtonStyle}>Delete</button></td>
+            <td>{r.id}</td>
+            <td>{r.machine?.name || '—'}</td>
+            <td>{r.temperature ?? '—'}</td>
+            <td>{r.vibration ?? '—'}</td>
+            <td>{r.pressure ?? '—'}</td>
+            <td>{r.rpm ?? '—'}</td>
+            <td>{r.powerConsumption ?? '—'}</td>
+            <td>{r.productionCount ?? '—'}</td>
+            <td>{fmtTime(r.timestamp)}</td>
+            <td><button type="button" onClick={() => deleteReading(r.id)} className="btn-danger">Delete</button></td>
           </tr>)}</tbody></table></div>
         )}
       </section>
@@ -338,48 +337,48 @@ export function MaintenancePage({ apiUrl, token }) {
 
   return (
     <>
-      <Header eyebrow="PREDICTIVE MAINTENANCE" title="Maintenance" text="Schedule and track machine maintenance work." icon="🔧" />
+      <Header eyebrow="PREDICTIVE MAINTENANCE" title="Maintenance" text="Schedule and track machine maintenance work." icon={<Icon name="wrench" size={56} />} />
       <section className="panel" style={{ marginBottom: 24 }}>
         <h3>Schedule Maintenance</h3>
         {machines.items.length === 0 && !machines.loading && <p className="orange">Add a machine first.</p>}
         <form onSubmit={addRecord}>
           <MachineSelect machines={machines.items} value={machineId} onChange={setMachineId} />
           <label>Maintenance type</label>
-          <select value={type} onChange={e => setType(e.target.value)} style={inputStyle}>
+          <select value={type} onChange={e => setType(e.target.value)}>
             <option value="PREVENTIVE">PREVENTIVE</option>
             <option value="CORRECTIVE">CORRECTIVE</option>
             <option value="INSPECTION">INSPECTION</option>
           </select>
           <label>Description</label>
-          <input value={description} onChange={e => setDescription(e.target.value)} placeholder="e.g. Replace needle and oil motor" required style={inputStyle} />
+          <input value={description} onChange={e => setDescription(e.target.value)} placeholder="e.g. Replace needle and oil motor" required />
           <label>Scheduled date</label>
-          <input type="date" value={date} onChange={e => setDate(e.target.value)} required style={inputStyle} />
+          <input type="date" value={date} onChange={e => setDate(e.target.value)} required />
           <label>Status</label>
-          <select value={status} onChange={e => setStatus(e.target.value)} style={inputStyle}>
+          <select value={status} onChange={e => setStatus(e.target.value)}>
             <option value="SCHEDULED">SCHEDULED</option>
             <option value="IN_PROGRESS">IN_PROGRESS</option>
             <option value="COMPLETED">COMPLETED</option>
           </select>
-          <button type="submit" disabled={saving || machines.items.length === 0} style={primaryButtonStyle}>{saving ? 'Saving...' : '+ Add Maintenance'}</button>
+          <button type="submit" disabled={saving || machines.items.length === 0} className="btn-primary">{saving ? 'Saving...' : '+ Add Maintenance'}</button>
         </form>
         {note && <p className="green">{note}</p>}
         {records.error && <p className="orange" role="alert">{records.error}</p>}
       </section>
       <section className="panel">
-        <div className="panel-heading"><h3>Maintenance Records</h3><button type="button" onClick={records.load} style={primaryButtonStyle}>Refresh</button></div>
+        <div className="panel-heading"><h3>Maintenance Records</h3><button type="button" onClick={records.load} className="btn-primary">Refresh</button></div>
         {records.loading ? <p>Loading records...</p> : records.items.length === 0 ? <p>No maintenance records yet. Add one above.</p> : (
-          <div style={{ overflowX: 'auto' }}><table style={tableStyle}><thead><tr>
-            {['ID', 'Machine', 'Type', 'Description', 'Date', 'Status', 'Action'].map(h => <th key={h} style={cellStyle}>{h}</th>)}
+          <div style={{ overflowX: 'auto' }}><table><thead><tr>
+            {['ID', 'Machine', 'Type', 'Description', 'Date', 'Status', 'Action'].map(h => <th key={h}>{h}</th>)}
           </tr></thead><tbody>{records.items.map(r => <tr key={r.id}>
-            <td style={cellStyle}>{r.id}</td>
-            <td style={cellStyle}>{r.machine?.name || '—'}</td>
-            <td style={cellStyle}>{r.maintenanceType || '—'}</td>
-            <td style={cellStyle}>{r.description || '—'}</td>
-            <td style={cellStyle}>{r.scheduledDate || '—'}</td>
-            <td style={cellStyle}><span className={`badge ${r.status === 'COMPLETED' ? 'running' : ''}`}>{r.status || '—'}</span></td>
-            <td style={cellStyle}>
-              {r.status !== 'COMPLETED' && <button type="button" onClick={() => markCompleted(r)} style={primaryButtonStyle}>Complete</button>}
-              <button type="button" onClick={() => deleteRecord(r.id)} style={deleteButtonStyle}>Delete</button>
+            <td>{r.id}</td>
+            <td>{r.machine?.name || '—'}</td>
+            <td>{r.maintenanceType || '—'}</td>
+            <td>{r.description || '—'}</td>
+            <td>{r.scheduledDate || '—'}</td>
+            <td><span className={`badge ${maintClass(r.status)}`}>{r.status || '—'}</span></td>
+            <td>
+              {r.status !== 'COMPLETED' && <button type="button" onClick={() => markCompleted(r)} className="btn-primary">Complete</button>}
+              <button type="button" onClick={() => deleteRecord(r.id)} className="btn-danger">Delete</button>
             </td>
           </tr>)}</tbody></table></div>
         )}
